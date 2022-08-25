@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="CsharpDataOriented" Version="1.0.0-beta2" />
     <PackageReference Include="CsharpMacros" Version="1.0.0-beta1" />
   </ItemGroup>
 
