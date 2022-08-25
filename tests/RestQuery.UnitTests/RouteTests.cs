@@ -4,7 +4,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-using static CsharpDataOriented.SequenceModule;
+using CsharpDataOriented;
+using static CsharpDataOriented.Sequence;
 using static RestQuery.UrlRoute;
 
 namespace RestQuery.UnitTests;
@@ -14,13 +15,14 @@ public class RouteTests
     [Fact]
     public void CanParseSimpleRoute()
     {
-        var route = Seq(
-            "segments", Seq(
-                Seq("name", "resource-type",
-                    "value", "Patient")));
+        var route = Seq(new {
+            segments = new[] { new { 
+                name = "resource-type",
+                value = "Patient" } } });
 
         var result = MatchRoute(route, "http://www.domain.com/Patient");
+        var matched = result.Get<bool>("matches");
 
-        Assert.Contains();
+        Assert.True(matched);
     }
 }

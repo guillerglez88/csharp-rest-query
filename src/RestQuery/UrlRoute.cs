@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 
 using static CsharpMultimethod.Multi;
 using CsharpDataOriented;
+using System.Text.RegularExpressions;
 
 namespace RestQuery;
 
@@ -18,9 +19,9 @@ public class UrlRoute
         var matchSegmentMulti = DefMulti(
             contract: ((string urlSeg, Seq routeSeg) args) => default(Seq),
             dispatch: ((string urlSeg, Seq routeSeg) args) => args.routeSeg
-                .Partition(size: 2)
-                .Select(part => part.Nth<string>(0))
-                .FirstOrDefault(prop => new[] { "value", "regex" }.Contains(prop)));
+                .Cast<Seq>()
+                .Select(prop => prop.Nth<string>(0))
+                .FirstOrDefault(prop => new[] { "value" }.Contains(prop)));
 
         matchSegmentMulti
             .DefMethod("value", (args) => MatchValue(args.urlSeg, args.routeSeg));
@@ -32,10 +33,26 @@ public class UrlRoute
     {
         var uri = new Uri(urlStr);
 
-        var segments = route.Get<Seq>(new[] { "segments" });
+        var segments = route
+            .Get("segments")
+            .Cast<Seq>()
+            .Select(item => item.Nth<Seq>(1))
+            .Zip(uri.Segments.Where(s => !Equals("/", s)))
+            .Select(pair => matchSegment(pair.Second, pair.First))
+            .ToArray();
+
+        var matches = segments.All(seg => seg.Get<bool>("matches"));
+
+        return route.With(new { segments, matches });
     }
 
     private static Seq MatchValue(string urlSeg, Seq routeSeg)
     {
+        var value = routeSeg.Get<string>("value");
+        var matches = Equals(urlSeg, value);
+
+        var validated = routeSeg.With(new { matches });
+
+        return validated;
     }
 }
