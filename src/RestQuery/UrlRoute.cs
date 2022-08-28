@@ -6,62 +6,71 @@ using System.Threading.Tasks;
 
 using static CsharpMultimethod.Multi;
 using CsharpDataOriented;
-using System.Text.RegularExpressions;
+using static CsharpDataOriented.Sequence;
+using System.Web;
 
 namespace RestQuery;
 
 public class UrlRoute
 {
-    private static Func<string, Seq, Seq> matchSegment;
+    private static Func<string, Seq, Seq> match;
 
     static UrlRoute()
     {
-        var matchSegmentMulti = DefMulti(
-            contract: ((string urlSeg, Seq routeSeg) args) => default(Seq),
-            dispatch: ((string urlSeg, Seq routeSeg) args) => args.routeSeg
+        var matchMulti = DefMulti(
+            contract: ((string token, Seq routeSeg) args) => default(Seq),
+            dispatch: ((string token, Seq routeSeg) args) => args.routeSeg
                 .Cast<Seq>()
                 .Select(prop => prop.Nth<string>(0))
                 .FirstOrDefault(prop => new[] { "value" }.Contains(prop)));
 
-        matchSegmentMulti
-            .DefMethod("value", (args) => MatchValue(args.urlSeg, args.routeSeg))
-            .DefDefault((_dispatchingVal, args) => MatchAll(args.urlSeg, args.routeSeg));
+        matchMulti
+            .DefMethod("value", (args) => MatchValue(args.token, args.routeSeg))
+            .DefDefault((_dispatchingVal, args) => MatchAll(args.token, args.routeSeg));
 
-        matchSegment = (urlSeg, routeSeg) => matchSegmentMulti.Invoke((urlSeg, routeSeg));
+        match = (urlSeg, routeSeg) => matchMulti.Invoke((urlSeg, routeSeg));
     }
 
     public static Seq MatchRoute(Seq route, string urlStr)
     {
         var uri = new Uri(urlStr);
+        var urlSegs = SanitizeSegs(uri.Segments);
+        var qs = HttpUtility.ParseQueryString(uri.Query);
+        var routeSegs = route.Get("segments").OrEmpty().Cast<Seq>();
+        var routeParams = route.Get("parameters").OrEmpty().Cast<Seq>();
 
-        var segments = route
-            .Get("segments")
-            .Cast<Seq>()
+        var segments = routeSegs
             .Select(item => item.Nth<Seq>(1))
-            .Zip(SanitizeSegs(uri.Segments))
-            .Select(pair => matchSegment(pair.Second, pair.First))
+            .Zip(urlSegs)
+            .Select(pair => match(pair.Second, pair.First))
             .ToArray();
 
-        var matches = segments.All(seg => seg.Get<bool>("matches"));
+        var parameters = qs.AllKeys
+            .Select(k => Seq(new { name = k, value = qs.GetValues(k), matches = true }))
+            .ToArray();
 
-        return route.With(new { segments, matches });
+        var matches = segments
+            .Concat(parameters)
+            .All(seg => seg.Get<bool>("matches"));
+
+        return route.With(new { segments, matches , parameters });
     }
 
-    private static Seq MatchAll(string urlSeg, Seq routeSeg)
+    private static Seq MatchAll(string token, Seq routeSeg)
     {
         var result = routeSeg.With(new
         {
             matches = true,
-            value = urlSeg
+            value = token
         });
 
         return result;
     }
 
-    private static Seq MatchValue(string urlSeg, Seq routeSeg)
+    private static Seq MatchValue(string token, Seq routeSeg)
     {
         var value = routeSeg.Get<string>("value");
-        var matches = Equals(urlSeg, value);
+        var matches = Equals(token, value);
 
         var validated = routeSeg.With(new { matches });
 

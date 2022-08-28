@@ -24,16 +24,15 @@ http://www.domain.com/Patient?_id=087b36e0-dc10-44a5-8b65-8794d10d7c0f
 generates this expression tree:
 
 ```json
-["fn", 
-    ["resource-type", "{{typeof(string)}}",
-     "_id", "{{typeof(string)}}"], 
-    ["and",
-        ["eq", 
-            ["const", "Patient"], 
-            ["param", "resource-type"]],
-        ["eq", 
-            ["const", "087b36e0-dc10-44a5-8b65-8794d10d7c0f"], 
-            ["param", "_id"]]]]
+[
+  "fn",
+  ["resource-type", "{{typeof(string)}}", "_id", "{{typeof(string)}}"],
+  [
+    "and",
+    ["eq", ["const", "Patient"], ["param", "resource-type"]],
+    ["eq", ["const", "087b36e0-dc10-44a5-8b65-8794d10d7c0f"], ["param", "_id"]]
+  ]
+]
 ```
 
 Which can be compiled to a function like this:
@@ -43,3 +42,31 @@ query: (resourceType: string, id: string) -> bool
 ```
 
 Or translated to a linq expression and converted into a SQL query
+
+## Route
+
+```
+http://www.domain.com/Patient
+    ?active=true
+    &gender=male
+```
+
+```json
+[["segments", [
+     ["0", [
+         ["name", ["resource-type"]],
+         ["value", ["Patient"]],
+         ["matches", [true]]]]]],
+ ["matches", [true]],
+ ["parameters", [
+     ["0", [
+         ["name", ["active"]],
+         ["value", [
+            ["0", ["true"]]]],
+         ["matches", [true]]]],
+     ["1", [
+         ["name", ["gender"]],
+         ["value", [
+            ["0", ["male"]]]],
+         ["matches", [true]]]]]]]
+```
