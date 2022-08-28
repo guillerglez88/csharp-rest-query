@@ -9,24 +9,16 @@ namespace RestQuery;
 
 public class UrlExpressions
 {
-    public static Exp ParseUrlExp(string url)
+    public static Exp BuildRouteExp(Route route)
     {
-        var uri = new Uri(url);
-        var resourceType = uri.Segments.Last();
-        var qs = HttpUtility.ParseQueryString(uri.Query);
+        var args = E(route.Components.SelectMany(f => E(f.Name, typeof(string))).ToArray());
 
-        var pathFields = new[] { new { name = "resource-type", values = new[]{ resourceType } } };
-        var qsFields = qs.AllKeys.Select(k => new { name = k, values = qs.GetValues(k) });
-        var fields = pathFields.Concat(qsFields).ToList();
-
-        var args = E(fields.SelectMany(f => E(f.name, typeof(string))).ToArray());
-
-        var predicate = fields
-            .Select(field => field.values
+        var predicate = route.Components
+            .Select(cmp => cmp.Values
                 .Select(value => 
                     E("eq", 
                         E("const", value), 
-                        E("param", field.name)))
+                        E("param", cmp.Name)))
                 .Aggregate((acc, curr) => 
                     E("or", acc, curr)))
             .Aggregate((acc, curr) => 
