@@ -24,7 +24,8 @@ public class UrlRoute
                 .FirstOrDefault(prop => new[] { "value" }.Contains(prop)));
 
         matchSegmentMulti
-            .DefMethod("value", (args) => MatchValue(args.urlSeg, args.routeSeg));
+            .DefMethod("value", (args) => MatchValue(args.urlSeg, args.routeSeg))
+            .DefDefault((_dispatchingVal, args) => MatchAll(args.urlSeg, args.routeSeg));
 
         matchSegment = (urlSeg, routeSeg) => matchSegmentMulti.Invoke((urlSeg, routeSeg));
     }
@@ -37,13 +38,24 @@ public class UrlRoute
             .Get("segments")
             .Cast<Seq>()
             .Select(item => item.Nth<Seq>(1))
-            .Zip(uri.Segments.Where(s => !Equals("/", s)))
+            .Zip(SanitizeSegs(uri.Segments))
             .Select(pair => matchSegment(pair.Second, pair.First))
             .ToArray();
 
         var matches = segments.All(seg => seg.Get<bool>("matches"));
 
         return route.With(new { segments, matches });
+    }
+
+    private static Seq MatchAll(string urlSeg, Seq routeSeg)
+    {
+        var result = routeSeg.With(new
+        {
+            matches = true,
+            value = urlSeg
+        });
+
+        return result;
     }
 
     private static Seq MatchValue(string urlSeg, Seq routeSeg)
@@ -55,4 +67,8 @@ public class UrlRoute
 
         return validated;
     }
+
+    private static IEnumerable<string> SanitizeSegs(IEnumerable<string> urlSegs) => urlSegs
+        .Select(s => s.Trim('/'))
+        .Where(s => !string.IsNullOrWhiteSpace(s));
 }
