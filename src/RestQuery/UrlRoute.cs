@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 using static CsharpMultimethod.Multi;
+using static CsharpMultimethod.PropBasedMultiExtensions;
 using CsharpDataOriented;
 using static CsharpDataOriented.Sequence;
 using System.Web;
@@ -13,68 +14,80 @@ namespace RestQuery;
 
 public class UrlRoute
 {
-    private static Func<string, Seq, Seq> match;
+    private static Func<string, Component, Component> match;
 
     static UrlRoute()
     {
         var matchMulti = DefMulti(
-            contract: ((string token, Seq routeSeg) args) => default(Seq),
-            dispatch: ((string token, Seq routeSeg) args) => args.routeSeg
-                .Cast<Seq>()
-                .Select(prop => prop.Nth<string>(0))
-                .FirstOrDefault(prop => new[] { "value" }.Contains(prop)));
+            contract: ((string token, Component component) args) => default(Component),
+            dispatch: ((string token, Component component) args) => DispatchByProp<Component>(
+                interestProps: new[] { nameof(Component.Values) }).Invoke(args.component));
 
         matchMulti
-            .DefMethod("value", (args) => MatchValue(args.token, args.routeSeg))
-            .DefDefault((_dispatchingVal, args) => MatchAll(args.token, args.routeSeg));
+            .DefMethod(nameof(Component.Values), (args) => MatchValue(args.token, args.component))
+            .DefDefault((_dispatchingVal, args) => MatchAll(args.token, args.component));
 
-        match = (urlSeg, routeSeg) => matchMulti.Invoke((urlSeg, routeSeg));
+        match = (token, component) => matchMulti.Invoke((token, component));
     }
 
-    public static Seq MatchRoute(Seq route, string urlStr)
+    public static Route MatchRoute(Route route, string urlStr)
     {
         var uri = new Uri(urlStr);
         var urlSegs = SanitizeSegs(uri.Segments);
         var qs = HttpUtility.ParseQueryString(uri.Query);
-        var routeSegs = route.Get("segments").OrEmpty().Cast<Seq>();
-        var routeParams = route.Get("parameters").OrEmpty().Cast<Seq>();
+        var lookup = route.Components.ToLookup(c => c.Source);
+        var routeSegs = Get(lookup, ComponentSource.Path);
+        var routeParams = Get(lookup, ComponentSource.Query);
 
         var segments = routeSegs
-            .Select(item => item.Nth<Seq>(1))
             .Zip(urlSegs)
             .Select(pair => match(pair.Second, pair.First))
             .ToArray();
 
         var parameters = qs.AllKeys
-            .Select(k => Seq(new { name = k, value = qs.GetValues(k), matches = true }))
+            .Select(k => new Component(
+                Source: ComponentSource.Query,
+                Name: k,
+                Values: qs.GetValues(k),
+                Matched: true))
             .ToArray();
 
         var matches = segments
             .Concat(parameters)
-            .All(seg => seg.Get<bool>("matches"));
+            .All(seg => seg.Matched);
 
-        return route.With(new { segments, matches , parameters });
-    }
-
-    private static Seq MatchAll(string token, Seq routeSeg)
-    {
-        var result = routeSeg.With(new
+        return route with
         {
-            matches = true,
-            value = token
-        });
-
-        return result;
+            Components = segments.Concat(parameters),
+            Matched = matches
+        };
     }
 
-    private static Seq MatchValue(string token, Seq routeSeg)
+    private static IEnumerable<Component> Get(
+        ILookup<ComponentSource, Component> lookup,
+        ComponentSource source)
+        => lookup.Contains(source) ? lookup[source] : Enumerable.Empty<Component>();
+
+    private static Component MatchAll(string token, Component component)
     {
-        var value = routeSeg.Get<string>("value");
-        var matches = Equals(token, value);
+        return component with
+        {
+            Matched = true,
+            Values = new[] { token }
+        };
+    }
 
-        var validated = routeSeg.With(new { matches });
+    private static Component MatchValue(string token, Component component)
+    {
+        var matches = (component.Values ?? new[] { token })
+            .Where(value => Equals(token, value))
+            .ToList();
 
-        return validated;
+        return component with
+        {
+            Matched = matches.Any(),
+            Values = matches
+        };
     }
 
     private static IEnumerable<string> SanitizeSegs(IEnumerable<string> urlSegs) => urlSegs

@@ -15,53 +15,53 @@ public class RouteTests
     [Fact]
     public void CanMatchSimpleRoute()
     {
-        var route = Seq(new {
-            segments = new[] { new { 
-                name = "resource-type",
-                value = "Patient" } } });
+        var route = new Route(
+            Components: new[] { new Component(
+                Source: ComponentSource.Path,
+                Name: "resource-type",
+                Values: new[]{ "Patient" } ) });
 
         var result = MatchRoute(route, "http://www.domain.com/Patient");
-        var matched = result.Get<bool>("matches");
 
-        Assert.True(matched);
+        Assert.True(result.Matched);
     }
 
     [Fact]
     public void CanMatchTwoSegmentsRoute()
     {
-        var route = Seq(new {
-            segments = new object [] { 
-                new { name = "resource-type",
-                      value = "Patient" },
-                new { name = "id" } } }); 
+        var route = new Route(
+            Components: new[] {
+                new Component (
+                    Source: ComponentSource.Path,
+                    Name: "resource-type",
+                    Values: new[]{ "Patient" }),
+                new Component (
+                    Source: ComponentSource.Path,
+                    Name: "id" ) });
 
         var result = MatchRoute(route, "http://www.domain.com/Patient/818d2646");
-        var matched = result.Get<bool>("matches");
-        var patId = result.Get<string>("segments", "1", "value");
 
-        Assert.True(matched);
-        Assert.Equal("818d2646", patId);
+        Assert.True(result.Matched);
+        Assert.Contains("818d2646", result.Components.Skip(1).First().Values);
     }
 
     [Fact]
     public void CanCaptureAllRoute()
     {
-        var route = Seq(new {
-            segments = new object [] { 
-                new { name = "resource-type" }}}); 
+        var route = new Route(
+            Components: new[] {
+                new Component (
+                    Source: ComponentSource.Path,
+                    Name: "resource-type" )});
 
-        var result = MatchRoute(route, 
+        var result = MatchRoute(route,
             "http://www.domain.com/Patient" +
                 "?active=true" +
                 "&gender=male");
-        var matched = result.Get<bool>("matches");
-        var resType = result.Get<string>("segments", "0", "value");
-        var active = result.Get<string>("parameters", "0", "value", "0");
-        var gender = result.Get<string>("parameters", "1", "value", "0");
 
-        Assert.True(matched);
-        Assert.Equal("Patient", resType);
-        Assert.Equal("true", active);
-        Assert.Equal("male", gender);
+        Assert.True(result.Matched);
+        Assert.Contains("Patient", result.Components.First().Values);
+        Assert.Contains("true", result.Components.Skip(1).First().Values);
+        Assert.Contains("male", result.Components.Skip(2).First().Values);
     }
 }
